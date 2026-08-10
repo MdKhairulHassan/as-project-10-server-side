@@ -84,8 +84,8 @@ const verifyFireBaseToken = async (req, res, next) => {
 
   try {
     const decoded = await getAuth().verifyIdToken(token);
-    // console.log('after token validation', decoded);
     req.token_email = decoded.email;
+    // console.log('after token validation', decoded);
 
     next();
   } catch (err) {
