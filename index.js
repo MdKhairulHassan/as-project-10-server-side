@@ -1,6 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+
+const jwt = require('jsonwebtoken');
+const token = jwt.sign({ foo: 'bar' }, 'shhhhh');
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const { initializeApp, cert } = require('firebase-admin/app');
@@ -31,11 +35,12 @@ initializeApp({
 app.use(cors());
 app.use(express.json());
 
+// ===================================================================================
 // middleware use in only a specific function
-const logger = (req, res, next) => {
-  console.log('logging information');
-  next();
-};
+// const logger = (req, res, next) => {
+//   console.log('logging information');
+//   next();
+// };
 
 // ===================================================================================
 // for firebase-admin old version:
@@ -95,6 +100,32 @@ const verifyFireBaseToken = async (req, res, next) => {
     });
   }
 };
+
+// ===================================================================================
+// const verifyJWTToken = async (req, res, next) => {
+//   // console.log('in the JWT verify middleware', req.headers);
+//   if (!req.headers.authorization) {
+//     return res.status(401).send({
+//       message: 'Unauthorized access',
+//     });
+//   }
+
+//   const token = req.headers.authorization.split(' ')[1];
+
+//   if (!token) {
+//     return res.status(401).send({ message: 'unauthorized access' });
+//   }
+
+//   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+//     if (err) {
+//       return res.status(401).send({ message: 'unauthorized access' });
+//     }
+//     console.log('after decoded', decoded);
+//     req.token_email = decoded.email;
+//     next();
+//   });
+// };
+
 // ===================================================================================
 // already created in old project name and password:
 // personalfmUser
@@ -122,38 +153,87 @@ const verifyFireBaseToken = async (req, res, next) => {
 // });
 
 // ===================================================================================
+// let client;
+
+// async function connectMongo() {
+//   const uris = [process.env.MONGODB_URI_SRV, process.env.MONGODB_URI_STANDARD];
+
+//   for (const uri of uris) {
+//     try {
+//       const tempClient = new MongoClient(uri, {
+//         serverApi: {
+//           version: ServerApiVersion.v1,
+//           strict: true,
+//           deprecationErrors: true,
+//         },
+//       });
+
+//       await tempClient.connect();
+
+//       console.log(
+//         `Connected using ${uri.startsWith('mongodb+srv') ? 'SRV' : 'Standard'} URI`,
+//       );
+
+//       client = tempClient;
+//       return;
+//     } catch (err) {
+//       console.log(
+//         `Failed using ${uri.startsWith('mongodb+srv') ? 'SRV' : 'Standard'} URI`,
+//       );
+//       console.log(err.code || err.message);
+//     }
+//   }
+
+//   throw new Error('Could not connect to MongoDB.');
+// }
+
+// ===================================================================================
 let client;
 
 async function connectMongo() {
   const uris = [process.env.MONGODB_URI_SRV, process.env.MONGODB_URI_STANDARD];
 
-  for (const uri of uris) {
-    try {
-      const tempClient = new MongoClient(uri, {
-        serverApi: {
-          version: ServerApiVersion.v1,
-          strict: true,
-          deprecationErrors: true,
-        },
-      });
+  while (true) {
+    console.log('If both url fail then retry after 1 Day later');
 
-      await tempClient.connect();
+    for (const uri of uris) {
+      try {
+        const tempClient = new MongoClient(uri, {
+          serverApi: {
+            version: ServerApiVersion.v1,
+            strict: true,
+            deprecationErrors: true,
+          },
+        });
 
-      console.log(
-        `Connected using ${uri.startsWith('mongodb+srv') ? 'SRV' : 'Standard'} URI`,
-      );
+        await tempClient.connect();
 
-      client = tempClient;
-      return;
-    } catch (err) {
-      console.log(
-        `Failed using ${uri.startsWith('mongodb+srv') ? 'SRV' : 'Standard'} URI`,
-      );
-      console.log(err.code || err.message);
+        console.log(
+          `Connected using ${
+            uri.startsWith('mongodb+srv') ? 'SRV' : 'Standard'
+          } URI`,
+        );
+
+        client = tempClient;
+
+        return;
+      } catch (err) {
+        console.log(
+          `Failed using ${
+            uri.startsWith('mongodb+srv') ? 'SRV' : 'Standard'
+          } URI`,
+        );
+
+        console.log(err.code || err.message);
+      }
     }
-  }
 
-  throw new Error('Could not connect to MongoDB.');
+    console.log('Both MongoDB URIs failed. Retrying in 1 Day...');
+
+    await new Promise(resolve => {
+      setTimeout(resolve, 24 * 60 * 60 * 1000);
+    });
+  }
 }
 
 // ===================================================================================
@@ -163,14 +243,104 @@ app.get('/', (req, res) => {
 
 async function run() {
   try {
+    // =====================
     // await client.connect();
+
+    // =====================
     await connectMongo();
 
+    // =====================
     const db = client.db('personal_fm');
     const transactionsCollection = db.collection('transactions');
     const usersCollection = db.collection('users');
     // const balanceCollection = db.collection('balanceOverview');
 
+    // =====================
+    // JWT related APIs
+    app.post('/getToken', (req, res) => {
+      const loggedUser = req.body;
+      // const token = jwt.sign({ email: 'abc' },
+      const token = jwt.sign(loggedUser, process.env.JWT_SECRET, {
+        expiresIn: '1h',
+      });
+      res.send({ token: token });
+    });
+
+    // =====================
+    // BALANCE APIs
+    // app.get('/balance', async (req, res) => {
+    //   // const projectField = { _id: 0, title: 1, amount: 1 };
+    //   // const cursor = balanceCollection
+    //   //   .find()
+    //   //   .sort({ amount: -1 })
+    //   //   .skip(2)
+    //   //   .limit(2)
+    //   //   .project(projectField);
+
+    //   console.log(req.query);
+    //   const email = req.query.email;
+    //   const query = {};
+    //   if (email) {
+    //     query.email = email;
+    //   }
+
+    //   const cursor = balanceCollection.find(query).limit(3);
+    //   const result = await cursor.toArray();
+    //   res.send(result);
+    // });
+
+    // app.get('/latest-balance', async (req, res) => {
+    //   const cursor = balanceCollection.find().sort({ amount: 1 });
+    //   const result = await cursor.toArray();
+    //   res.send(result);
+
+    //   // =========================================
+    //   // const email = req.query.email;
+    //   // const query = {};
+    //   // if (email) {
+    //   //   query.email = email;
+    //   // }
+    //   // const cursor = balanceCollection.find(query);
+    //   // const result = await cursor.toArray();
+    //   // res.send(result);
+    // });
+
+    // app.get('/balance/:id', async (req, res) => {
+    //   const id = req.params.id;
+    //   const query = { _id: new ObjectId(id) };
+    //   const result = await balanceCollection.findOne(query);
+    //   res.send(result);
+    // });
+
+    // app.post('/balance', async (req, res) => {
+    //   const newBalance = req.body;
+    //   const result = await balanceCollection.insertOne(newBalance);
+    //   res.send(result);
+    // });
+
+    // app.patch('/balance/:id', async (req, res) => {
+    //   const id = req.params.id;
+    //   const updatedBalance = req.body;
+    //   const query = { _id: new ObjectId(id) };
+    //   const update = {
+    //     // $set: updatedBalance,
+    //     $set: {
+    //       name: updatedBalance.name,
+    //       amount: updatedBalance.amount,
+    //     },
+    //   };
+    //   const result = await balanceCollection.updateOne(query, update);
+    //   res.send(result);
+    // });
+
+    // app.delete('/balance/:id', async (req, res) => {
+    //   const id = req.params.id;
+    //   const query = { _id: new ObjectId(id) };
+    //   const result = await balanceCollection.deleteOne(query);
+    //   res.send(result);
+    // });
+
+    // =====================
     // USERS APIs
     app.post('/users', async (req, res) => {
       const newUser = req.body;
@@ -189,7 +359,24 @@ async function run() {
 
     // ===================================================================================
     // transaction related apis
-    app.get('/transactions', logger, verifyFireBaseToken, async (req, res) => {
+    // app.get('/transactions', verifyJWTToken, async (req, res) => {
+    //   // console.log('headers', req.headers);
+    //   const email = req.query.email;
+    //   const query = {};
+    //   if (email) {
+    //     if (email !== req.token_email) {
+    //       return res.status(403).send({ message: 'forbidden access' });
+    //     }
+    //     query.email = email;
+    //   }
+    //   const cursor = transactionsCollection.find(query).sort({ createdAt: -1 });
+    //   const result = await cursor.toArray();
+    //   res.send(result);
+    // });
+
+    // ===================================================================================
+    // transaction related apis
+    app.get('/transactions', verifyFireBaseToken, async (req, res) => {
       // console.log('headers', req);
       const email = req.query.email;
       const query = {};
@@ -273,6 +460,7 @@ async function run() {
   } finally {
   }
 }
+
 run().catch(console.dir);
 
 app.listen(port, () => {
