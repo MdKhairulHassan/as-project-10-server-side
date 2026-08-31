@@ -2,8 +2,9 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-const jwt = require('jsonwebtoken');
-const token = jwt.sign({ foo: 'bar' }, 'shhhhh');
+// for JWT token
+// const jwt = require('jsonwebtoken');
+// const token = jwt.sign({ foo: 'bar' }, 'shhhhh');
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
@@ -75,20 +76,42 @@ app.use(express.json());
 // for firebase admin version 14
 const verifyFireBaseToken = async (req, res, next) => {
   // console.log('in the verify middleware', req.headers.authorization);
-  if (!req.headers.authorization) {
+
+  const authorization = req.headers.authorization;
+
+  // ========================================== not better for secure ----- 'Bearer ' and token
+  if (!authorization) {
     return res.status(401).send({
       message: 'Unauthorized access',
     });
   }
 
-  const token = req.headers.authorization.split(' ')[1];
+  // const token = authorization.slice(7).trim();
 
+  // ========================================== better for secure ----- 'Bearer ' and token
+  if (!authorization?.startsWith('Bearer ')) {
+    return res.status(401).send({
+      message: 'Unauthorized access',
+    });
+  }
+
+  const token = authorization.split(' ')[1];
+
+  // ==========================================
   if (!token) {
     return res.status(401).send({ message: 'unauthorized access' });
   }
 
   try {
     const decoded = await getAuth().verifyIdToken(token);
+
+    if (!decoded.email) {
+      return res.status(401).send({
+        // message: 'Authenticated user has no email',
+        message: 'Unauthorized access',
+      });
+    }
+
     req.token_email = decoded.email;
     // console.log('after token validation', decoded);
 
@@ -399,23 +422,34 @@ async function run() {
     // });
 
     // ===================================================================================
-    app.post('/transactions', async (req, res) => {
-      // const transaction = req.body;
+    app.post('/transactions', verifyFireBaseToken, async (req, res) => {
+      const transaction = req.body;
 
       // // Convert string into real MongoDB Date
       // transaction.date = new Date(transaction.date);
 
       // transaction.createdAt = new Date();
 
-      const transaction = {
-        ...req.body,
-        date: new Date(req.body.date),
+      // console.log('headers in the post', req.headers);
+
+      const email = transaction.email;
+
+      if (email && email !== req.token_email) {
+        return res.status(403).send({
+          message: 'Forbidden: email does not match the signed-in user.',
+        });
+      }
+
+      const safeTransaction = {
+        ...transaction,
+        email: req.token_email,
+        date: new Date(transaction.date),
         createdAt: new Date(),
       };
 
-      const result = await transactionsCollection.insertOne(transaction);
-
-      res.send(result);
+      const result = await transactionsCollection.insertOne(safeTransaction);
+      // res.send(result);
+      res.status(201).send(result);
     });
 
     // ===================================================================================
