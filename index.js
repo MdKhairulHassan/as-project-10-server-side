@@ -453,26 +453,73 @@ async function run() {
     });
 
     // ===================================================================================
-    app.patch('/transactions/:id', async (req, res) => {
+    // app.patch('/transactions/:id', verifyFireBaseToken, async (req, res) => {
+    //   const id = req.params.id;
+
+    //   const updated = req.body;
+
+    //   const query = {
+    //     _id: new ObjectId(id),
+    //   };
+
+    //   const update = {
+    //     $set: updated,
+    //   };
+
+    //   const result = await transactionsCollection.updateOne(
+    //     query,
+
+    //     update,
+    //   );
+
+    //   res.send(result);
+    // });
+
+    // ========================
+    app.patch('/transactions/:id', verifyFireBaseToken, async (req, res) => {
       const id = req.params.id;
 
-      const updated = req.body;
+      const email = req.body.email;
 
-      const query = {
-        _id: new ObjectId(id),
-      };
+      if (email && email !== req.token_email) {
+        return res.status(403).send({
+          message: 'Forbidden: email does not match the signed-in user.',
+        });
+      }
 
-      const update = {
-        $set: updated,
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({
+          message: 'Invalid transaction ID.',
+        });
+      }
+
+      const updateData = {
+        title: req.body.title,
+        amount: Number(req.body.amount),
+        category: req.body.category,
+        type: req.body.type,
+        date: new Date(req.body.date),
+        description: req.body.description,
+        updatedAt: new Date(),
       };
 
       const result = await transactionsCollection.updateOne(
-        query,
-
-        update,
+        {
+          _id: new ObjectId(id),
+          email: req.token_email,
+        },
+        {
+          $set: updateData,
+        },
       );
 
-      res.send(result);
+      if (result.matchedCount === 0) {
+        return res.status(404).send({
+          message: 'Transaction not found or you do not have permission.',
+        });
+      }
+
+      res.status(200).send(result);
     });
 
     // ===================================================================================
