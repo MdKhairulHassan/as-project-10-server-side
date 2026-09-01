@@ -34,7 +34,10 @@ initializeApp({
 // ===================================================================================
 // middleware use in everywhere
 app.use(cors());
-app.use(express.json());
+
+// =========
+// app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
 
 // ===================================================================================
 // middleware use in only a specific function
@@ -275,19 +278,19 @@ async function run() {
     // =====================
     const db = client.db('personal_fm');
     const transactionsCollection = db.collection('transactions');
-    const usersCollection = db.collection('users');
+    // const usersCollection = db.collection('users');
     // const balanceCollection = db.collection('balanceOverview');
 
     // =====================
-    // JWT related APIs
-    app.post('/getToken', (req, res) => {
-      const loggedUser = req.body;
-      // const token = jwt.sign({ email: 'abc' },
-      const token = jwt.sign(loggedUser, process.env.JWT_SECRET, {
-        expiresIn: '1h',
-      });
-      res.send({ token: token });
-    });
+    // // JWT related APIs
+    // app.post('/getToken', (req, res) => {
+    //   const loggedUser = req.body;
+    //   // const token = jwt.sign({ email: 'abc' },
+    //   const token = jwt.sign(loggedUser, process.env.JWT_SECRET, {
+    //     expiresIn: '1h',
+    //   });
+    //   res.send({ token: token });
+    // });
 
     // =====================
     // BALANCE APIs
@@ -365,20 +368,20 @@ async function run() {
 
     // =====================
     // USERS APIs
-    app.post('/users', async (req, res) => {
-      const newUser = req.body;
-      const email = req.body.email;
-      const query = { email: email };
-      const existingUser = await usersCollection.findOne(query);
-      if (existingUser) {
-        res.send({
-          message: 'user already exit. do not need to insert him again',
-        });
-      } else {
-        const result = await usersCollection.insertOne(newUser);
-        res.send(result);
-      }
-    });
+    // app.post('/users', async (req, res) => {
+    //   const newUser = req.body;
+    //   const email = req.body.email;
+    //   const query = { email: email };
+    //   const existingUser = await usersCollection.findOne(query);
+    //   if (existingUser) {
+    //     res.send({
+    //       message: 'user already exit. do not need to insert him again',
+    //     });
+    //   } else {
+    //     const result = await usersCollection.insertOne(newUser);
+    //     res.send(result);
+    //   }
+    // });
 
     // ===================================================================================
     // transaction related apis
@@ -398,20 +401,53 @@ async function run() {
     // });
 
     // ===================================================================================
-    // transaction related apis
-    app.get('/transactions', verifyFireBaseToken, async (req, res) => {
-      // console.log('headers', req);
-      const email = req.query.email;
-      const query = {};
-      if (email) {
-        if (email !== req.token_email) {
-          return res.status(403).send({ message: 'forbidden access' });
+    // // transaction related apis
+    // app.get('/transactions', verifyFireBaseToken, async (req, res) => {
+    //   // console.log('headers', req);
+    //   const email = req.query.email;
+    //   const query = {};
+    //   if (email) {
+    //     if (email !== req.token_email) {
+    //       return res.status(403).send({ message: 'forbidden access' });
+    //     }
+    //     query.email = email;
+    //   }
+    //   const cursor = transactionsCollection.find(query).sort({ createdAt: -1 });
+    //   const result = await cursor.toArray();
+    //   res.send(result);
+    // });
+
+    // =======================================
+    app.get('/transactions', verifyFireBaseToken, async (req, res, next) => {
+      try {
+        const email = req.query.email;
+
+        if (email && email !== req.token_email) {
+          return res.status(403).send({
+            message:
+              'Forbidden Access. email does not match the signed-in user.',
+          });
         }
-        query.email = email;
+        if (!email) {
+          return res.status(403).send({
+            message:
+              'Forbidden Access: email does not existing with the signed-in user.',
+          });
+        }
+
+        const result = await transactionsCollection
+          .find({
+            email: req.token_email,
+          })
+          .sort({
+            createdAt: -1,
+          })
+          .toArray();
+
+        res.status(200).send(result);
+      } catch (error) {
+        next(error);
       }
-      const cursor = transactionsCollection.find(query).sort({ createdAt: -1 });
-      const result = await cursor.toArray();
-      res.send(result);
     });
 
     // ===================================================================================
@@ -421,35 +457,87 @@ async function run() {
     //   res.send(result);
     // });
 
-    // ===================================================================================
-    app.post('/transactions', verifyFireBaseToken, async (req, res) => {
-      const transaction = req.body;
+    // =================================
+    // app.post('/transactions', verifyFireBaseToken, async (req, res) => {
+    //   const transaction = req.body;
 
-      // // Convert string into real MongoDB Date
-      // transaction.date = new Date(transaction.date);
+    //   // // Convert string into real MongoDB Date
+    //   // transaction.date = new Date(transaction.date);
 
-      // transaction.createdAt = new Date();
+    //   // transaction.createdAt = new Date();
 
-      // console.log('headers in the post', req.headers);
+    //   // console.log('headers in the post', req.headers);
 
-      const email = transaction.email;
+    //   const email = transaction.email;
 
-      if (email && email !== req.token_email) {
-        return res.status(403).send({
-          message: 'Forbidden: email does not match the signed-in user.',
-        });
+    //   if (email && email !== req.token_email) {
+    //     return res.status(403).send({
+    //       message: 'Forbidden: email does not match the signed-in user.',
+    //     });
+    //   }
+
+    //   const safeTransaction = {
+    //     ...transaction,
+    //     email: req.token_email,
+    //     date: new Date(transaction.date),
+    //     createdAt: new Date(),
+    //   };
+
+    //   const result = await transactionsCollection.insertOne(safeTransaction);
+    //   // res.send(result);
+    //   res.status(201).send(result);
+    // });
+
+    // =====================================
+    app.post('/transactions', verifyFireBaseToken, async (req, res, next) => {
+      try {
+        const { title, amount, category, type, date, description, email } =
+          req.body;
+
+        if (email && email !== req.token_email) {
+          return res.status(403).send({
+            message:
+              'Forbidden Access. email does not match the signed-in user.',
+          });
+        }
+        if (!email) {
+          return res.status(403).send({
+            message:
+              'Forbidden Access: email does not existing with the signed-in user.',
+          });
+        }
+
+        const numericAmount = Number(amount);
+        const transactionDate = new Date(date);
+
+        if (
+          !title?.trim() ||
+          !Number.isFinite(numericAmount) ||
+          numericAmount <= 0 ||
+          Number.isNaN(transactionDate.getTime())
+        ) {
+          return res.status(400).send({
+            message: 'Please provide a valid title, positive amount, and date.',
+          });
+        }
+
+        const safeTransaction = {
+          title: title.trim(),
+          amount: numericAmount,
+          category,
+          type,
+          date: transactionDate,
+          description: description?.trim() || '',
+          email: req.token_email,
+          createdAt: new Date(),
+        };
+
+        const result = await transactionsCollection.insertOne(safeTransaction);
+
+        res.status(201).send(result);
+      } catch (error) {
+        next(error);
       }
-
-      const safeTransaction = {
-        ...transaction,
-        email: req.token_email,
-        date: new Date(transaction.date),
-        createdAt: new Date(),
-      };
-
-      const result = await transactionsCollection.insertOne(safeTransaction);
-      // res.send(result);
-      res.status(201).send(result);
     });
 
     // ===================================================================================
@@ -475,7 +563,7 @@ async function run() {
     //   res.send(result);
     // });
 
-    // ========================
+    // ===================
     app.patch('/transactions/:id', verifyFireBaseToken, async (req, res) => {
       const id = req.params.id;
 
@@ -483,7 +571,13 @@ async function run() {
 
       if (email && email !== req.token_email) {
         return res.status(403).send({
-          message: 'Forbidden: email does not match the signed-in user.',
+          message: 'Forbidden Access. email does not match the signed-in user.',
+        });
+      }
+      if (!email) {
+        return res.status(403).send({
+          message:
+            'Forbidden Access: email does not existing with the signed-in user.',
         });
       }
 
@@ -523,14 +617,38 @@ async function run() {
     });
 
     // ===================================================================================
-    app.delete('/transactions/:id', async (req, res) => {
+    // app.delete('/transactions/:id', async (req, res) => {
+    //   const id = req.params.id;
+
+    //   const result = await transactionsCollection.deleteOne({
+    //     _id: new ObjectId(id),
+    //   });
+
+    //   res.send(result);
+    // });
+
+    // ========================
+    app.delete('/transactions/:id', verifyFireBaseToken, async (req, res) => {
       const id = req.params.id;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({
+          message: 'Invalid transaction ID.',
+        });
+      }
 
       const result = await transactionsCollection.deleteOne({
         _id: new ObjectId(id),
+        email: req.token_email,
       });
 
-      res.send(result);
+      if (result.deletedCount === 0) {
+        return res.status(404).send({
+          message: 'Transaction not found or you do not have permission.',
+        });
+      }
+
+      res.status(200).send(result);
     });
 
     // ===================================================================================
