@@ -492,8 +492,16 @@ async function run() {
     // =====================================
     app.post('/transactions', verifyFireBaseToken, async (req, res, next) => {
       try {
-        const { title, amount, category, type, date, description, email } =
-          req.body;
+        const {
+          title,
+          amount,
+          category,
+          type,
+          date,
+          description,
+          name,
+          email,
+        } = req.body;
 
         if (email && email !== req.token_email) {
           return res.status(403).send({
@@ -529,6 +537,7 @@ async function run() {
           type,
           date: transactionDate,
           description: description?.trim() || '',
+          name,
           email: req.token_email,
           createdAt: new Date(),
         };
