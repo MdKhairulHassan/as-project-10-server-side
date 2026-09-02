@@ -257,7 +257,8 @@ async function connectMongo() {
     console.log('Both MongoDB URIs failed. Retrying in 1 Day...');
 
     await new Promise(resolve => {
-      setTimeout(resolve, 24 * 60 * 60 * 1000);
+      // setTimeout(resolve, 24 * 60 * 60 * 1000);
+      setTimeout(resolve, 2 * 60 * 1000);
     });
   }
 }
@@ -564,56 +565,176 @@ async function run() {
     // });
 
     // ===================
-    app.patch('/transactions/:id', verifyFireBaseToken, async (req, res) => {
-      const id = req.params.id;
+    // app.patch('/transactions/:id', verifyFireBaseToken, async (req, res) => {
+    //   const id = req.params.id;
 
-      const email = req.body.email;
+    //   const email = req.body.email;
 
-      if (email && email !== req.token_email) {
-        return res.status(403).send({
-          message: 'Forbidden Access. email does not match the signed-in user.',
-        });
+    //   if (email && email !== req.token_email) {
+    //     return res.status(403).send({
+    //       message: 'Forbidden Access. email does not match the signed-in user.',
+    //     });
+    //   }
+    //   if (!email) {
+    //     return res.status(403).send({
+    //       message:
+    //         'Forbidden Access: email does not existing with the signed-in user.',
+    //     });
+    //   }
+
+    //   if (!ObjectId.isValid(id)) {
+    //     return res.status(400).send({
+    //       message: 'Invalid transaction ID.',
+    //     });
+    //   }
+
+    //   const updateData = {
+    //     title: req.body.title,
+    //     amount: Number(req.body.amount),
+    //     category: req.body.category,
+    //     type: req.body.type,
+    //     date: new Date(req.body.date),
+    //     description: req.body.description,
+    //     updatedAt: new Date(),
+    //   };
+
+    //   const result = await transactionsCollection.updateOne(
+    //     {
+    //       _id: new ObjectId(id),
+    //       email: req.token_email,
+    //     },
+    //     {
+    //       $set: updateData,
+    //     },
+    //   );
+
+    //   if (result.matchedCount === 0) {
+    //     return res.status(404).send({
+    //       message: 'Transaction not found or you do not have permission.',
+    //     });
+    //   }
+
+    //   res.status(200).send(result);
+    // });
+
+    // ===================
+    const TRANSACTION_TYPES = new Set(['Income', 'Expense']);
+
+    const TRANSACTION_CATEGORIES = new Set([
+      'salary',
+      'freelance',
+      'business',
+      'transport',
+      'investment',
+      'bill',
+      'rent',
+      'food',
+      'buy',
+      'others',
+    ]);
+
+    const buildTransactionUpdate = body => {
+      const title = body.title?.trim();
+      const amount = Number(body.amount);
+      const category = body.category;
+      const type = body.type;
+      const date = new Date(body.date);
+      const description = body.description?.trim() || '';
+
+      if (!title) {
+        return { error: 'Title is required.' };
       }
-      if (!email) {
-        return res.status(403).send({
-          message:
-            'Forbidden Access: email does not existing with the signed-in user.',
-        });
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return { error: 'Amount must be a positive number.' };
       }
 
-      if (!ObjectId.isValid(id)) {
-        return res.status(400).send({
-          message: 'Invalid transaction ID.',
-        });
+      if (!TRANSACTION_CATEGORIES.has(category)) {
+        return { error: 'Invalid transaction category.' };
       }
 
-      const updateData = {
-        title: req.body.title,
-        amount: Number(req.body.amount),
-        category: req.body.category,
-        type: req.body.type,
-        date: new Date(req.body.date),
-        description: req.body.description,
-        updatedAt: new Date(),
+      if (!TRANSACTION_TYPES.has(type)) {
+        return { error: 'Invalid transaction type.' };
+      }
+
+      if (Number.isNaN(date.getTime())) {
+        return { error: 'Invalid transaction date.' };
+      }
+
+      return {
+        value: {
+          title,
+          amount,
+          category,
+          type,
+          date,
+          description,
+          updatedAt: new Date(),
+        },
       };
+    };
 
-      const result = await transactionsCollection.updateOne(
-        {
-          _id: new ObjectId(id),
-          email: req.token_email,
-        },
-        {
-          $set: updateData,
-        },
-      );
+    app.patch('/transactions/:id', verifyFireBaseToken, async (req, res) => {
+      try {
+        const { id } = req.params;
 
-      if (result.matchedCount === 0) {
-        return res.status(404).send({
-          message: 'Transaction not found or you do not have permission.',
+        const email = req.body.email;
+
+        if (email && email !== req.token_email) {
+          return res.status(403).send({
+            message:
+              'Forbidden Access. email does not match the signed-in user.',
+          });
+        }
+        if (!email) {
+          return res.status(403).send({
+            message:
+              'Forbidden Access: email does not existing with the signed-in user.',
+          });
+        }
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({
+            message: 'Invalid transaction ID.',
+          });
+        }
+
+        const { value: updateData, error } = buildTransactionUpdate(req.body);
+
+        if (error) {
+          return res.status(400).send({
+            message: error,
+          });
+        }
+
+        const result = await transactionsCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+            email: req.token_email,
+          },
+          {
+            $set: updateData,
+          },
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({
+            message: 'Transaction not found.',
+          });
+        }
+
+        res.status(200).send({
+          message: 'Transaction updated successfully.',
+          matchedCount: result.matchedCount,
+          modifiedCount: result.modifiedCount,
+        });
+      } catch (error) {
+        console.error('PATCH /transactions/:id failed:', error);
+
+        res.status(500).send({
+          message: 'Could not update the transaction.',
         });
       }
-
-      res.status(200).send(result);
     });
 
     // ===================================================================================
@@ -628,27 +749,84 @@ async function run() {
     // });
 
     // ========================
+    // app.delete('/transactions/:id', verifyFireBaseToken, async (req, res) => {
+    //   const id = req.params.id;
+
+    //   if (!ObjectId.isValid(id)) {
+    //     return res.status(400).send({
+    //       message: 'Invalid transaction ID.',
+    //     });
+    //   }
+
+    //   const result = await transactionsCollection.deleteOne({
+    //     _id: new ObjectId(id),
+    //     email: req.token_email,
+    //   });
+
+    //   if (result.deletedCount === 0) {
+    //     return res.status(404).send({
+    //       message: 'Transaction not found or you do not have permission.',
+    //     });
+    //   }
+
+    //   res.status(200).send(result);
+    // });
+
+    // ========================
     app.delete('/transactions/:id', verifyFireBaseToken, async (req, res) => {
-      const id = req.params.id;
+      try {
+        const { id } = req.params;
 
-      if (!ObjectId.isValid(id)) {
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({
+            message: 'Invalid transaction ID.',
+          });
+        }
+
+        const result = await transactionsCollection.deleteOne({
+          _id: new ObjectId(id),
+          email: req.token_email,
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({
+            message: 'Transaction not found.',
+          });
+        }
+
+        res.status(200).send({
+          message: 'Transaction deleted successfully.',
+          deletedCount: result.deletedCount,
+        });
+      } catch (error) {
+        console.error('DELETE /transactions/:id failed:', error);
+
+        res.status(500).send({
+          message: 'Could not delete the transaction.',
+        });
+      }
+    });
+
+    // ===================================================================================
+    // Global error handler — KEEP THIS NEAR THE END
+    app.use((err, req, res, next) => {
+      console.error(err);
+
+      if (err.type === 'entity.too.large') {
+        return res.status(413).send({
+          message: 'Request body is too large.',
+        });
+      }
+
+      if (err instanceof SyntaxError && err.status === 400) {
         return res.status(400).send({
-          message: 'Invalid transaction ID.',
+          message: 'Invalid JSON.',
         });
       }
 
-      const result = await transactionsCollection.deleteOne({
-        _id: new ObjectId(id),
-        email: req.token_email,
+      res.status(500).send({
+        message: 'Internal server error.',
       });
-
-      if (result.deletedCount === 0) {
-        return res.status(404).send({
-          message: 'Transaction not found or you do not have permission.',
-        });
-      }
-
-      res.status(200).send(result);
     });
 
     // ===================================================================================
