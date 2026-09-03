@@ -213,7 +213,8 @@
 // //   throw new Error('Could not connect to MongoDB.');
 // // }
 
-// // ===================================================================================
+// // ======================================================== It can create zombie client and connection pool it's very dangerous to use in a server like this.
+
 // let client;
 
 // async function connectMongo() {
@@ -890,21 +891,21 @@ initializeApp({
 // --------------------------------------------------
 // CORS and body parsing
 // --------------------------------------------------
-const allowedOrigins = (process.env.CLIENT_ORIGINS || 'http://localhost:5173')
-  .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
+// const allowedOrigins = (process.env.CLIENT_ORIGINS || 'http://localhost:5173')
+//   .split(',')
+//   .map(origin => origin.trim())
+//   .filter(Boolean);
 
 app.use(
   cors({
-    origin(origin, callback) {
-      // Allows Postman and server-to-server requests.
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+    // origin(origin, callback) {
+    //   // Allows Postman and server-to-server requests.
+    //   if (!origin || allowedOrigins.includes(origin)) {
+    //     return callback(null, true);
+    //   }
 
-      return callback(new Error('Origin is not allowed by CORS.'));
-    },
+    //   return callback(new Error('Origin is not allowed by CORS.'));
+    // },
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
@@ -1323,7 +1324,12 @@ function registerRoutes(transactionsCollection) {
 // Server startup
 // --------------------------------------------------
 async function startServer() {
-  let retryDelay = 5000;
+  // let retryDelay = 5000;
+
+  const INITIAL_RETRY_DELAY = 5000; // 5 seconds
+  const MAX_RETRY_DELAY = 60000; // 60 seconds
+
+  let retryDelay = INITIAL_RETRY_DELAY;
 
   while (!client) {
     try {
@@ -1335,7 +1341,9 @@ async function startServer() {
 
       await wait(retryDelay);
 
-      retryDelay = Math.min(retryDelay * 2, 60000);
+      // retryDelay = Math.min(retryDelay * 2, 60000);
+
+      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
     }
   }
 
