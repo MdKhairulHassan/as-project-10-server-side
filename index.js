@@ -925,7 +925,16 @@ app.use(
 
     //   return callback(new Error('Origin is not allowed by CORS.'));
     // },
+
+    // ============= // These tell CORS which browser requests your backend will allow.
+    // This allows only these request methods:
+    // - GET → read transactions
+    // - POST → create transaction
+    // - PATCH → update transaction
+    // - DELETE → delete transaction
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+
+    // ============= // It matches your API routes. This allows the frontend to send these request headers: - Content-Type → tells the server the body format, for example JSON:Content-Type: application/json - Authorization → sends the Firebase token:
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
@@ -939,6 +948,10 @@ app.use(express.json({ limit: '10kb' })); // It limits the JSON body size for ea
 // --------------------------------------------------
 // Helpers
 // --------------------------------------------------
+// ============ //
+// creates a Promise, meaning “this work will finish later.”
+// resolve → a function that marks the Promise as finished.
+// setTimeout(resolve, ms) → waits ms milliseconds, then runs resolve.
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // ============ // This version works for async errors.
