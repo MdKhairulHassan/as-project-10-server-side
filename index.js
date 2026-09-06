@@ -1121,8 +1121,8 @@ const verifyFireBaseToken = async (req, res, next) => {
 // --------------------------------------------------
 // MongoDB connection
 // --------------------------------------------------
-// ============ // filter(Boolean) removes empty/falsy values. Before .filter(Boolean), the array is like this:[true, undefined]. After [true].It removes values like: undefined, null, '', false, 0.
 async function connectMongoOnce() {
+  // ============ // filter(Boolean) removes empty/falsy values. Before .filter(Boolean), the array is like this:[true, undefined]. After [true].It removes values like: undefined, null, '', false, 0.
   const uris = [
     process.env.MONGODB_URI_SRV,
     process.env.MONGODB_URI_STANDARD,
@@ -1143,7 +1143,12 @@ async function connectMongoOnce() {
     try {
       temporaryClient = new MongoClient(uri, {
         serverApi: {
+          // ============ // version: ServerApiVersion.v1: Sets the standard rules you want to follow.
+          // Locks the client to MongoDB's Stable API v1.
+          // Ensures long-term compatibility so database upgrades won't break your app code.
           version: ServerApiVersion.v1,
+
+          // ============ // When you set strict: true, you are locking your MongoDB client into a strict compatibility mode that forces your code to follow the exact rules of the stable API version you chose (ServerApiVersion.v1).
           strict: true,
 
           // ============ // When you set deprecationErrors: true, you are telling MongoDB: "If my code uses any old, outdated features that will be removed in future versions, throw an error immediately instead of ignoring it."In programming, deprecated means a feature is still working for now, but it is old, unsupported, and scheduled to be completely deleted in the next big update.
@@ -1196,7 +1201,7 @@ function registerRoutes(transactionsCollection) {
     '/transactions',
     verifyFireBaseToken,
     asyncHandler(async (req, res) => {
-      // ================= Don't try to use this type of second-layer verification by client input. It could create a vulnerability, allowing sophisticated hackers to determine whether your email exists in Firebase or in the database. Then they could try multiple times with this email to access the website or its database.
+      // ============ // Don't try to use this type of second-layer verification by client input. It could create a vulnerability, allowing sophisticated hackers to determine whether your email exists in Firebase or in the database. Then they could try multiple times with this email to access the website or its database.
 
       // const email = req.query.email;
 
@@ -1212,7 +1217,7 @@ function registerRoutes(transactionsCollection) {
       //   });
       // }
 
-      // ===============
+      // ============
       const result = await transactionsCollection
         .find({
           email: req.token_email,
@@ -1230,7 +1235,7 @@ function registerRoutes(transactionsCollection) {
     '/transactions',
     verifyFireBaseToken,
     asyncHandler(async (req, res) => {
-      // ================= Verification by client input. It could create a vulnerability, allowing sophisticated hackers to determine whether your email exists in Firebase or in the database. Then they could try multiple times with this email to access the website or its database.
+      // ============ // Verification by client input. It could create a vulnerability, allowing sophisticated hackers to determine whether your email exists in Firebase or in the database. Then they could try multiple times with this email to access the website or its database.
       // solution just don't check email with client input like this. But you can take client email input for other reason.
 
       // const email = req.body.email;
@@ -1247,7 +1252,7 @@ function registerRoutes(transactionsCollection) {
       //   });
       // }
 
-      // ===============
+      // ============
       const { value: transactionData, error } = buildTransactionData(req.body);
 
       if (error) {
@@ -1276,7 +1281,7 @@ function registerRoutes(transactionsCollection) {
     asyncHandler(async (req, res) => {
       const { id } = req.params;
 
-      // ================= Verification by client input. It could create a vulnerability, allowing sophisticated hackers to determine whether your email exists in Firebase or in the database. Then they could try multiple times with this email to access the website or its database.
+      // ============ // Verification by client input. It could create a vulnerability, allowing sophisticated hackers to determine whether your email exists in Firebase or in the database. Then they could try multiple times with this email to access the website or its database.
       // solution just don't check email with client input like this. But you can take client email input for other reason.
 
       // const email = req.body.email;
@@ -1293,7 +1298,7 @@ function registerRoutes(transactionsCollection) {
       //   });
       // }
 
-      // ===============
+      // ============
       if (!ObjectId.isValid(id)) {
         return res.status(400).send({
           message: 'Invalid transaction ID.',
@@ -1382,7 +1387,16 @@ function registerRoutes(transactionsCollection) {
     }),
   );
 
+  // ============ // error is a parameter of Express, just like req, res, and next.However, Express will only recognize it and treat it as the err parameter if your function has exactly 4 parameters (error, req, res, next).
   // Must be registered after every route.
+  // This is your global Express error handler. Express recognizes it as an error middleware because it has four parameters.
+  // When an error is passed using next(error), Express skips normal routes and comes here.
+  // Your error handler can receive errors from these parts:
+  // CORS middleware
+  // express.json() body parser
+  // Your API routes
+  // Your asyncHandler()
+  // Any middleware that calls next(error)
   app.use((error, req, res, next) => {
     console.error('Server error:', error);
 
@@ -1413,6 +1427,13 @@ function registerRoutes(transactionsCollection) {
     });
   });
 }
+// That means it sends the error here.
+// Route error
+//  ↓
+// next(error)
+//  ↓
+// app.use((error, req, res, next) => ...)
+// This handles every unknown error safely. It does not expose private database or server error details to the frontend.
 
 // --------------------------------------------------
 // Server startup
