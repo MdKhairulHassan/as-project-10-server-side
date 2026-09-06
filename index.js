@@ -82,7 +82,7 @@
 
 //   const authorization = req.headers.authorization;
 
-//   // ========================================== not better for secure ----- 'Bearer ' and token
+//   // ========================================== not better for checking ----- 'Bearer ' and token. But about security I have no idea.
 //   if (!authorization) {
 //     return res.status(401).send({
 //       message: 'Unauthorized access',
@@ -91,7 +91,7 @@
 
 //   // const token = authorization.slice(7).trim();
 
-//   // ========================================== better for secure ----- 'Bearer ' and token
+//   // ========================================== better for checking ----- 'Bearer ' and token. But about security I have no idea.
 //   if (!authorization?.startsWith('Bearer ')) {
 //     return res.status(401).send({
 //       message: 'Unauthorized access',
@@ -854,7 +854,7 @@
 //   console.log(`personal finance management server is running on port: ${port}`);
 // });
 
-// // =====================================================================================================
+// // ============================================================================================================================
 // // client
 // //   .connect()
 // //   .then(() => {
@@ -866,28 +866,46 @@
 // //   })
 // //   .catch(console.dir);
 
-// // =====================================================================================================
+// // ============================================================================================================================ // //
+// ============= // require() is not a normal Express or cors function—it is an Node.js function to import express plugins from node_modules.
 const express = require('express');
+
+// ============= // require() is not a normal Express or cors function—it is an Node.js function to import cors plugins from node_modules.
 const cors = require('cors');
+
+// ============= // This is for importing and configuring the .env file.
 require('dotenv').config();
 
+// ============= // This is for destructuring objects from MongoDB.
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
+// ============= // This is for destructuring objects from firebase-admin/app.
 const { initializeApp, cert } = require('firebase-admin/app');
+
+// ============= // This is for destructuring objects from firebase-admin/auth.
 const { getAuth } = require('firebase-admin/auth');
 
+// ============= // This is for use the Express package.
 const app = express();
+
+// ============= // This is for import the secure port from .env file.
 const port = process.env.PORT || 3000;
 
 let client;
 
-// Keep this file private and out of Git.
+// ============= // Keep this file private and out of Git. It's a firebase admin key.
 const serviceAccount = require('./finease-finance-management-firebase-admin-key.json');
 
+// ============= // Main idea: this connects your backend server to your Firebase project securely.
+// - serviceAccount = your private Firebase Admin key file.
+// - cert(serviceAccount) = turns that key into Firebase credentials.
+// - initializeApp(...) = starts/configures Firebase Admin in your server.
 initializeApp({
+  // It takes your Firebase service-account JSON data and makes it into a valid credential Firebase Admin can use.
   credential: cert(serviceAccount),
 });
 
+// ============================================================================================================================
 // --------------------------------------------------
 // CORS and body parsing
 // --------------------------------------------------
@@ -896,6 +914,7 @@ initializeApp({
 //   .map(origin => origin.trim())
 //   .filter(Boolean);
 
+// ============= // app.use() is not a normal JavaScript function—it is an Express function to tells Express: “Use this middleware for every incoming request.”
 app.use(
   cors({
     // origin(origin, callback) {
@@ -913,17 +932,28 @@ app.use(
 
 // app.use(cors());
 
-app.use(express.json({ limit: '10kb' }));
+// ============= // This tells Express to read JSON request data before your routes run.
+app.use(express.json({ limit: '10kb' })); // It limits the JSON body size for each incoming request. It means Express accepts request JSON up to about 10 KB. If the limit is exceeded, Express creates an error. Then your error middleware handles it.
 
+// ============================================================================================================================
 // --------------------------------------------------
 // Helpers
 // --------------------------------------------------
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// ============ // This version works for async errors.
+// const asyncHandler = handler => (req, res, next) => {
+//   Promise.resolve(handler(req, res, next)).catch(next);
+// };
+
+// ============ // But this version is safer for both normal and async errors.
 const asyncHandler = handler => (req, res, next) => {
-  Promise.resolve(handler(req, res, next)).catch(next);
+  Promise.resolve()
+    .then(() => handler(req, res, next))
+    .catch(next);
 };
 
+// ============ // new Set() creates a special list of unique values. Giving false if the list value does not match.
 const TRANSACTION_TYPES = new Set(['Income', 'Expense']);
 
 const TRANSACTION_CATEGORIES = new Set([
@@ -940,19 +970,38 @@ const TRANSACTION_CATEGORIES = new Set([
 ]);
 
 const parseTransactionDate = value => {
+  // ============ // check for date shape. like "2026-06-30"
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return null;
   }
 
+  // ============ // destructuring array. like "2026-06-05" to ["2026, "06", "30"]
   const [year, month, day] = value.split('-').map(Number);
 
-  const date = new Date(Date.UTC(year, month - 1, day));
+  // ============ // need to minus 1 from month because months count in javascript from 0.
+  const date = new Date(Date.UTC(year, month - 1, day)); // It takes human-readable date components (year, month, day, etc.), interprets them strictly in Coordinated Universal Time (UTC), and spits out a single Unix timestamp number.
 
-  // Rejects invalid dates such as 2026-02-30.
+  // Rejects invalid dates such as 2026-02-30. Without a leap year It will rejected.
   if (
+    // ============ // For local time string. Just for example, not for use here; it is mostly used on the client side.
+    // date.getFullYear()
+    // date.getMonth()
+    // date.getDate()
+
+    // ============ // using mongoDB database. then use new Date(). Because MongoDB can use dates as an object. but toISOString is only a string. which is working good for JSON/API/log/display.
+    // MongoDB date field → save Date object
+    // JSON/API/log/display string → use toISOString()
+
+    // ============ // for Coordinated Universal Time - UTC
     date.getUTCFullYear() !== year ||
     date.getUTCMonth() !== month - 1 ||
     date.getUTCDate() !== day
+
+    // ============ // for Coordinated Universal Time - UTC more options if you set hours, minutes, seconds, milliseconds.
+    // date.getUTCHours() ➡️ Returns hours(0–23)
+    // date.getUTCMinutes() ➡️ Returns minutes(0–59)
+    // date.getUTCSeconds() ➡️ Returns seconds(0–59)
+    // date.getUTCMilliseconds() ➡️ Returns milliseconds(0–999)
   ) {
     return null;
   }
@@ -961,6 +1010,7 @@ const parseTransactionDate = value => {
 };
 
 const buildTransactionData = body => {
+  // ============ // const laviathan = '  Lunch  '.trim(); laviathan = 'Lunch'
   const title = body.title?.trim();
   const amount = Number(body.amount);
   const category = body.category;
@@ -977,6 +1027,7 @@ const buildTransactionData = body => {
     return { error: 'Amount must be a positive number.' };
   }
 
+  // ============ // has() checks whether a Set contains a value.
   if (!TRANSACTION_CATEGORIES.has(category)) {
     return { error: 'Invalid transaction category.' };
   }
@@ -1004,10 +1055,26 @@ const buildTransactionData = body => {
 // --------------------------------------------------
 // Firebase token verification
 // --------------------------------------------------
+// ============ // req, res, and next are the three common parameters of an Express middleware function.
 const verifyFireBaseToken = async (req, res, next) => {
+  // ============ // Sophisticated hackers can determine whether your token matching with Firebase or not. Then they could try multiple times using the same token to access other users' information on the website. But it's better to check ----- 'Bearer ' and token. But this is the weakness here: it will be easy to filter this token by vulnerable attack.
+
+  // if (!authorization?.startsWith('Bearer ')) {
+  //   return res.status(401).send({
+  //     message: 'Unauthorized access',
+  //   });
+  // }
+
+  // ============ // Sophisticated hackers can determine whether your token matching with Firebase or not. Then they could try multiple times using the same token to access other users' information on the website. But it's better to check ----- 'Bearer ' and token. But this is the weakness here: it will be easy to filter this token by vulnerable attack.
+
+  // const token = authorization.split(' ')[1];
+
+  // ============
   const authorization = req.headers.authorization;
 
-  const match = authorization?.match(/^Bearer\s+(.+)$/i);
+  // const match = authorization?.match(/^Bearer\s+(.+)$/i); // Good but not critically unreliable. Need more references to accept this.
+
+  const match = authorization?.match(/^Bearer\s+([^\s]+)$/i)?.[1];
 
   if (!match) {
     return res.status(401).send({
@@ -1015,7 +1082,9 @@ const verifyFireBaseToken = async (req, res, next) => {
     });
   }
 
+  // ============ // Using await → prefer try...catch. Using Promise chaining → use .then().catch().
   try {
+    // ============ // getAuth() comes from the Firebase Admin SDK. It means give me access to Firebase Authentication for my server. verifyIdToken() gives that token to Firebase Admin, and Firebase checks whether the token is valid.
     const decodedToken = await getAuth().verifyIdToken(match[1]);
 
     if (!decodedToken.email) {
@@ -1040,6 +1109,7 @@ const verifyFireBaseToken = async (req, res, next) => {
 // --------------------------------------------------
 // MongoDB connection
 // --------------------------------------------------
+// ============ // filter(Boolean) removes empty/falsy values. Before .filter(Boolean), the array is like this:[true, undefined]. After [true].It removes values like: undefined, null, '', false, 0.
 async function connectMongoOnce() {
   const uris = [
     process.env.MONGODB_URI_SRV,
@@ -1047,25 +1117,35 @@ async function connectMongoOnce() {
   ].filter(Boolean);
 
   if (uris.length === 0) {
+    // ============ // new Error(...) creates an error object with your message. throw stops the current function immediately and sends that error upward. If uris = []; Then this runs:
     throw new Error('MongoDB URI is missing from .env.');
   }
 
   let lastError;
 
+  // ============ // for-of loop for iterating over an array of indices.
   for (const uri of uris) {
     let temporaryClient;
 
+    // ============ // Using await → prefer try...catch. Using Promise chaining → use .then().catch().
     try {
       temporaryClient = new MongoClient(uri, {
         serverApi: {
           version: ServerApiVersion.v1,
           strict: true,
+
+          // ============ // When you set deprecationErrors: true, you are telling MongoDB: "If my code uses any old, outdated features that will be removed in future versions, throw an error immediately instead of ignoring it."In programming, deprecated means a feature is still working for now, but it is old, unsupported, and scheduled to be completely deleted in the next big update.
           deprecationErrors: true,
         },
+
+        // ============ // how long (in milliseconds) the MongoDB client will try to find and connect to a valid database server before giving up and throwing an error.
         serverSelectionTimeoutMS: 10000,
       });
 
+      // ============ // for creating new client. But if error to connect then it will be close.
       await temporaryClient.connect();
+
+      // ============ // .command() is a lower-level tool used to check server health, modify configurations, or run optimizations. And The .db() function tells the MongoDB client: "Hey, focus all my next operations on this specific database."
       await temporaryClient.db('admin').command({ ping: 1 });
 
       console.log(
@@ -1080,10 +1160,12 @@ async function connectMongoOnce() {
 
       console.error('MongoDB connection attempt failed:', error.message);
 
+      // ============ // client close safely.
       await temporaryClient?.close().catch(() => {});
     }
   }
 
+  // ============ // new Error(...) creates an error object with your message. throw stops the current function immediately and sends that error upward
   throw lastError || new Error('Could not connect to MongoDB.');
 }
 
@@ -1331,6 +1413,7 @@ async function startServer() {
 
   let retryDelay = INITIAL_RETRY_DELAY;
 
+  // ============ // while loop is an infinite loop. If the condition is true, it will run infinitely.
   while (!client) {
     try {
       client = await connectMongoOnce();
@@ -1339,31 +1422,50 @@ async function startServer() {
         `MongoDB unavailable. Retrying in ${retryDelay / 1000} seconds.`,
       );
 
+      // ============ // The loop function will wait for the next step for this wait value.
       await wait(retryDelay);
 
+      // =============== // Math.min(1,2) always works with the minimum number first. then when it reach max. then the function work with same value.
       // retryDelay = Math.min(retryDelay * 2, 60000);
-
       retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
     }
   }
 
+  // ===============
   const db = client.db('personal_fm');
   const transactionsCollection = db.collection('transactions');
 
+  // =============== // You need this index to make this database query faster. First organize by email Then, inside each email, organize newest transactions first
   await transactionsCollection.createIndex({
+    // ascending order
     email: 1,
+    // descending order
     createdAt: -1,
   });
 
+  // =============== // This runs your registerRoutes function and gives it access to your MongoDB transactions collection.
+  // Inside that function, you create routes like:
+  // app.get('/transactions', ...)
+  // app.post('/transactions', ...)
+  // app.patch('/transactions/:id', ...)
+  // app.delete('/transactions/:id', ...)
+  // So after this line, your server knows which code to run when a frontend calls /transactions.
   registerRoutes(transactionsCollection);
 
+  // =============== // This starts your Express server and makes it wait for requests. And - port is usually from my .env file.
   app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
   });
 }
 
+// =============== // This code handles starting failures and safely stopping my server.
+// startServer() is an async function, so it returns a Promise.
+// - .catch(error => ...) runs if startup fails completely.
 startServer().catch(error => {
   console.error('Server startup failed:', error);
+
+  // =============== // - process.exit(1) stops the Node.js server.
+  // process.exit(0); This also stops the Node.js server, but: - process.exit(0) → normal/successful shutdown - process.exit(1) → shutdown because of an error
   process.exit(1);
 });
 
@@ -1373,10 +1475,22 @@ startServer().catch(error => {
 const shutdown = async () => {
   console.log('Closing server...');
 
+  // This line tries to close your MongoDB connection safely before the server stops.
+  // client = MongoDB client connection.
+  // .close() = closes that connection.
+  // ?. means “only call .close() if client exists.”
   await client?.close().catch(() => {});
 
+  // =============== // - process.exit(1) stops the Node.js server.
+  // process.exit(0); This also stops the Node.js server, but: - process.exit(0) → normal/successful shutdown - process.exit(1) → shutdown because of an error
   process.exit(0);
 };
 
+// =============== //
+// 'SIGINT' and 'SIGTERM' are built-in operating-system signal names that Node.js understands.
+// shutdown is my own custom function name.
+// =============== // process.on() tells Node.js: “When this event happens, run this function.” Here: - SIGINT usually happens when you press Ctrl + C in the terminal. - Then Node.js runs shutdown().
 process.on('SIGINT', shutdown);
+
+// =============== // SIGTERM is a “please stop the server” signal. Hosting platforms often send it when they restart, redeploy, or stop your server. Then Node.js runs shutdown().
 process.on('SIGTERM', shutdown);
