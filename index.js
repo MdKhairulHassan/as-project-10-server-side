@@ -960,11 +960,33 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 // };
 
 // ============ // But this version is safer for both normal and async errors.
-const asyncHandler = handler => (req, res, next) => {
-  Promise.resolve()
-    .then(() => handler(req, res, next))
-    .catch(next);
+// const asyncHandler = handler => (req, res, next) => {
+//   Promise.resolve()
+//     .then(() => handler(req, res, next))
+//     .catch(next);
+// };
+
+// ============ // But this version is safer for both normal and async errors.
+// Your current .then().catch() version and this try...catch version do the same job. try...catch is often easier to read with async/await, so you can safely choose it.
+// You do not need to add a separate try...catch inside every route, because asyncHandler catches errors for all wrapped routes.
+const asyncHandler = handler => async (req, res, next) => {
+  try {
+    // Important: you must use await inside try.
+    await handler(req, res, next);
+  } catch (error) {
+    next(error);
+  }
 };
+// Flow:
+// Database error
+//     ↓
+// catch (error)
+//     ↓
+// next(error)
+//     ↓
+// your global error middleware
+//     ↓
+// 500 Internal server error
 
 // ============ // new Set() creates a special list of unique values. Giving false if the list value does not match.
 const TRANSACTION_TYPES = new Set(['Income', 'Expense']);
