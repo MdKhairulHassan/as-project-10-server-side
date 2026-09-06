@@ -969,6 +969,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 // ============ // But this version is safer for both normal and async errors.
 // Your current .then().catch() version and this try...catch version do the same job. try...catch is often easier to read with async/await, so you can safely choose it.
 // You do not need to add a separate try...catch inside every route, because asyncHandler catches errors for all wrapped routes.
+// Why await replaces Promise.resolve() completely? ans: The await keyword automatically handles both regular values and promises.If your handler returns a promise (because it is an async function), await will pause and wait for it.If your handler returns a regular value, await automatically treats it like a resolved promise anyway.
 const asyncHandler = handler => async (req, res, next) => {
   try {
     // Important: you must use await inside try.
