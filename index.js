@@ -1058,7 +1058,6 @@ const buildTransactionData = body => {
 // ============ // req, res, and next are the three common parameters of an Express middleware function.
 const verifyFireBaseToken = async (req, res, next) => {
   // ============ // Sophisticated hackers can determine whether your token matching with Firebase or not. Then they could try multiple times using the same token to access other users' information on the website. But it's better to check ----- 'Bearer ' and token. But this is the weakness here: it will be easy to filter this token by vulnerable attack.
-
   // if (!authorization?.startsWith('Bearer ')) {
   //   return res.status(401).send({
   //     message: 'Unauthorized access',
@@ -1066,7 +1065,6 @@ const verifyFireBaseToken = async (req, res, next) => {
   // }
 
   // ============ // Sophisticated hackers can determine whether your token matching with Firebase or not. Then they could try multiple times using the same token to access other users' information on the website. But it's better to check ----- 'Bearer ' and token. But this is the weakness here: it will be easy to filter this token by vulnerable attack.
-
   // const token = authorization.split(' ')[1];
 
   // ============
@@ -1085,7 +1083,8 @@ const verifyFireBaseToken = async (req, res, next) => {
   // ============ // Using await → prefer try...catch. Using Promise chaining → use .then().catch().
   try {
     // ============ // getAuth() comes from the Firebase Admin SDK. It means give me access to Firebase Authentication for my server. verifyIdToken() gives that token to Firebase Admin, and Firebase checks whether the token is valid.
-    const decodedToken = await getAuth().verifyIdToken(match[1]);
+    // const decodedToken = await getAuth().verifyIdToken(match[1]); // don't need to use it with this regex pattern.
+    const decodedToken = await getAuth().verifyIdToken(match);
 
     if (!decodedToken.email) {
       return res.status(401).send({
