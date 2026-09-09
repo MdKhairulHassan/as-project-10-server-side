@@ -973,6 +973,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const asyncHandler = handler => async (req, res, next) => {
   try {
     // Important: you must use await inside try.
+    // await Promise.resolve(handler(req, res, next)); // It's possible to write it like this. But it's unnecessary.
     await handler(req, res, next);
   } catch (error) {
     next(error);
