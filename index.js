@@ -1382,6 +1382,61 @@ function registerRoutes(transactionsCollection) {
   );
 
   app.delete(
+    '/transactions/bulk',
+    verifyFireBaseToken,
+    asyncHandler(async (req, res) => {
+      // one thing you should remember req.body is and object. I mean it's wrap with {}. But ids wrap with [...]. like ids = [...].
+      const { ids } = req.body;
+
+      // 1. Check whether ids is a valid non-empty array
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).send({
+          message: 'Transaction IDs are required.',
+        });
+      }
+
+      // 2. Check whether every ID is a valid MongoDB ObjectId
+      if (!ids.every(id => ObjectId.isValid(id))) {
+        return res.status(400).send({
+          message: 'One or more transaction IDs are invalid.',
+        });
+      }
+
+      // 3. Convert string IDs into MongoDB ObjectId
+      const objectIds = ids.map(id => new ObjectId(id));
+
+      // ======================================================
+      // ========== // An example of this structure will be.
+      //   {
+      //   _id: {
+      //     $in: [
+      //       new ObjectId('68b123456789abcdef000001'),
+      //       new ObjectId('68b123456789abcdef000002'),
+      //       new ObjectId('68b123456789abcdef000003')
+      //     ]
+      //   },
+      //   email: 'user@gmail.com'
+      // }
+      // 4. Delete only the user's own transactions
+      const result = await transactionsCollection.deleteMany({
+        // ========== // $in is not used to save an ID in MongoDB. $in is a MongoDB query operator for querying multiple IDs.
+        // ========== // When MongoDB stores an ID, you simply have: {_id: new ObjectId('68b123456789abcdef000001')}.
+        // ========== // $in → query operator → finds documents whose value is in a list.
+        // ========== // $set → update operator → sets/changes a field value.
+        // ========== // $oid → insert/create an ID → It represents an ObjectId.
+        _id: { $in: objectIds },
+        email: req.token_email,
+      });
+
+      // 5. Send result back to client
+      res.status(200).send({
+        message: 'Selected transactions deleted successfully.',
+        deletedCount: result.deletedCount,
+      });
+    }),
+  );
+
+  app.delete(
     '/transactions/:id',
     verifyFireBaseToken,
     asyncHandler(async (req, res) => {
@@ -1393,6 +1448,12 @@ function registerRoutes(transactionsCollection) {
         });
       }
 
+      // ======================================================
+      // ========== // An example of this structure will be.
+      // {
+      //   _id: new ObjectId('68b123456789abcdef000001'),
+      //   email: 'user@gmail.com'
+      // }
       const result = await transactionsCollection.deleteOne({
         _id: new ObjectId(id),
         email: req.token_email,
