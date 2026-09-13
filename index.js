@@ -891,10 +891,19 @@ const app = express();
 // ============= // This is for import the secure port from .env file.
 const port = process.env.PORT || 3000;
 
+// console.log(process.env);
+
 let client;
 
 // ============= // Keep this file private and out of Git. It's a firebase admin key.
-const serviceAccount = require('./finease-finance-management-firebase-admin-key.json');
+// const serviceAccount = require('./finease-finance-management-firebase-admin-key.json');
+
+// ============= // Base64 is useful for your Vercel deployment. Because my .gitignore contains: finease-finance-management-firebase-admin-key.json. So that secret JSON won't be uploaded to GitHub/Vercel.
+const serviceAccount = JSON.parse(
+  Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString(
+    'utf8',
+  ),
+);
 
 // ============= // Main idea: this connects your backend server to your Firebase project securely.
 // - serviceAccount = your private Firebase Admin key file.
@@ -1187,7 +1196,7 @@ async function connectMongoOnce() {
       await temporaryClient.connect();
 
       // ============ // .command() is a lower-level tool used to check server health, modify configurations, or run optimizations. And The .db() function tells the MongoDB client: "Hey, focus all my next operations on this specific database."
-      await temporaryClient.db('admin').command({ ping: 1 });
+      // await temporaryClient.db('admin').command({ ping: 1 }); // Some platforms are not good for ping.
 
       console.log(
         `MongoDB connected using ${
